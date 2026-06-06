@@ -21,26 +21,56 @@ st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(90deg, #f8fafc 0%, #ffffff 100%);
+        background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%);
         color: #0f172a;
     }
     .big-title {
-        font-size:32px;
-        font-weight:700;
-        color:#0b5fff;
+        font-size: 36px;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 0.25rem;
     }
     .subtitle {
-        color:#475569;
-        margin-bottom:12px;
+        color: #475569;
+        font-size: 18px;
+        margin-top: 0;
+        margin-bottom: 1rem;
+    }
+    .card {
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 24px;
+        padding: 24px;
+        box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        margin-bottom: 24px;
     }
     .stButton>button {
-        background-color: #0b5fff;
-        color: white;
+        background-color: #0b5fff !important;
+        color: white !important;
+        border-radius: 12px !important;
+        padding: 0.8rem 1.2rem !important;
+        font-weight: 700 !important;
+    }
+    .stButton>button:hover {
+        background-color: #2438ff !important;
+    }
+    .stTextArea textarea,
+    .stTextInput>div>div>input {
+        border-radius: 16px !important;
+        background: #f8fafc !important;
+        border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    }
+    #MainMenu, footer, .viewerBadge_container__1QSob {
+        visibility: hidden;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+if "report" not in st.session_state:
+    st.session_state["report"] = ""
+
 # =====================================================
 # LOAD FILES
 # =====================================================
@@ -95,12 +125,12 @@ page = st.sidebar.radio(
         "Medical Vocabulary Builder",
         "Diagnostic Importance Analysis",
         "Model Information"
-    ]
+    ],
+    index=0
 )
 
 st.sidebar.markdown("---")
 st.sidebar.header("Quick Examples")
-st.sidebar.write("Try pasting one of these example reports:")
 example_reports = {
     "Cardiology (chest pain)": "Patient presents with chest pain, shortness of breath, and elevated troponin levels.",
     "Neurology (stroke)": "Sudden onset right-sided weakness, facial droop, and slurred speech noted 2 hours ago.",
@@ -108,9 +138,13 @@ example_reports = {
 }
 
 for name, text in example_reports.items():
-    st.sidebar.button(name, key=f"example_{name}")
+    if st.sidebar.button(name, key=f"example_{name}"):
+        st.session_state["report"] = text
 
 st.sidebar.markdown("---")
+st.sidebar.info(
+    "Upload a report, paste notes, or use an example. The analysis module predicts specialty and displays confidence scores."
+)
 st.sidebar.caption("Built for clinicians and researchers — handle PHI appropriately.")
 
 # =====================================================
@@ -160,65 +194,77 @@ def predict_specialty(text):
 # =====================================================
 
 if page == "Medical Report Analysis":
-    st.header("Medical Report Classification")
+    st.markdown('<div class="big-title">🩺 Medical Report Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Paste a clinical note or upload a report to classify the most likely specialty and review predicted confidence scores.</div>', unsafe_allow_html=True)
 
-    left, right = st.columns([3, 2])
+    left, right = st.columns([3, 2], gap="large")
 
     with left:
-        uploaded = st.file_uploader("Upload report file (txt) ", type=["txt"], help="Optional: upload a .txt clinical report")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        uploaded = st.file_uploader("Upload report file (txt)", type=["txt"], help="Optional: upload a .txt clinical report")
 
         if uploaded is not None:
-            report = uploaded.read().decode("utf-8")
-            st.text_area("Report Preview", value=report, height=220)
-        else:
-            report = st.text_area("Paste Medical Report", height=220, placeholder="Paste clinical note or report here...")
+            st.session_state["report"] = uploaded.read().decode("utf-8")
 
-        example_select = st.selectbox("Or use an example report", ["","Cardiology (chest pain)","Neurology (stroke)","Dermatology (rash)"])
-        if example_select and report.strip()=="":
-            report = example_reports.get(example_select.split(" (")[0]+" ("+example_select.split("(")[-1], report)
+        report = st.text_area(
+            "Medical Report",
+            value=st.session_state["report"],
+            height=260,
+            key="report_input"
+        )
 
+        st.markdown("---")
         analyze_btn = st.button("Analyze Report")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
-        st.markdown("**Model quick info**")
-        st.write(f"Max length: {MAX_LENGTH}")
-        st.write(f"Vocab size: {params.get('vocab_size', 'N/A'):,}")
-        st.write(f"Classes: {params.get('num_classes', 'N/A')}")
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("Model quick info")
+        st.markdown(f"**Max length:** {MAX_LENGTH}")
+        st.markdown(f"**Vocabulary size:** {params.get('vocab_size', 'N/A'):,}")
+        st.markdown(f"**Classes:** {params.get('num_classes', 'N/A')}")
+        st.markdown("---")
+        st.write("**Use one of the sidebar examples to populate the report quickly.**")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     if analyze_btn:
-        if not report or report.strip() == "":
+        report_text = st.session_state["report"]
+        if not report_text or not report_text.strip():
             st.warning("Please enter or upload a medical report.")
         else:
-            specialty, confidence, probs = predict_specialty(report)
+            specialty, confidence, probs = predict_specialty(report_text)
+            st.success(f"**Predicted Specialty:** {specialty}")
 
-            st.success(f"Predicted Specialty: {specialty}")
-            st.metric("Confidence", f"{confidence*100:.2f}%")
+            metric_col1, metric_col2, metric_col3 = st.columns(3)
+            metric_col1.metric("Confidence", f"{confidence * 100:.2f}%")
+            metric_col2.metric("Vocabulary", f"{params.get('vocab_size', 'N/A'):,}")
+            metric_col3.metric("Classes", params.get('num_classes', 'N/A'))
 
             class_names = label_encoder.classes_
             prob_df = pd.DataFrame({"Specialty": class_names, "Probability": probs})
             prob_df = prob_df.sort_values(by="Probability", ascending=False)
 
+            st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("Top Predictions")
             topn = prob_df.head(5).reset_index(drop=True)
-
             cols = st.columns(len(topn))
             for i, row in topn.iterrows():
                 with cols[i]:
                     st.markdown(f"**{i+1}. {row['Specialty']}**")
-                    st.write(f"{row['Probability']*100:.1f}%")
-                    st.progress(int(row['Probability']*100))
+                    st.write(f"{row['Probability'] * 100:.1f}%")
+                    st.progress(int(row['Probability'] * 100))
 
             st.subheader("Full Probability Distribution")
             chart = alt.Chart(prob_df).mark_bar().encode(
-                x=alt.X('Probability:Q'),
-                y=alt.Y('Specialty:N', sort='-x'),
+                x=alt.X('Probability:Q', title='Probability'),
+                y=alt.Y('Specialty:N', sort='-x', title='Specialty'),
                 tooltip=['Specialty', alt.Tooltip('Probability:Q', format='.3f')]
-            ).properties(height=300)
+            ).properties(height=320)
 
             st.altair_chart(chart, use_container_width=True)
-
             with st.expander("View probability table"):
                 st.dataframe(prob_df.style.format({"Probability": "{:.3f}"}))
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================
 # PAGE 2
@@ -226,44 +272,31 @@ if page == "Medical Report Analysis":
 
 elif page == "Medical Vocabulary Builder":
 
-    st.header("Medical Vocabulary Builder")
+    st.markdown('<div class="big-title">📚 Medical Vocabulary Builder</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Explore the tokenizer vocabulary and search for medical terms recognized by the model.</div>', unsafe_allow_html=True)
 
-    st.write(
-        f"Vocabulary Size: {len(tokenizer.word_index):,}"
-    )
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.write(f"**Vocabulary Size:** {len(tokenizer.word_index):,}")
 
     search_word = st.text_input(
         "Search Medical Term"
     )
 
     if search_word:
-
         if search_word.lower() in tokenizer.word_index:
-
-            st.success(
-                f"'{search_word}' found."
-            )
-
-            st.write(
-                "Token Index:",
-                tokenizer.word_index[
-                    search_word.lower()
-                ]
-            )
-
+            st.success(f"'{search_word}' found.")
+            st.write("Token Index:", tokenizer.word_index[search_word.lower()])
         else:
-            st.error(
-                f"'{search_word}' not found."
-            )
+            st.error(f"'{search_word}' not found.")
 
-    st.subheader("Sample Vocabulary")
-
+    st.markdown("---")
+    st.subheader("Top 100 Tokens")
     vocab_df = pd.DataFrame(
         list(tokenizer.word_index.items())[:100],
         columns=["Word", "Token_ID"]
     )
-
     st.dataframe(vocab_df)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================
 # PAGE 3
@@ -271,11 +304,14 @@ elif page == "Medical Vocabulary Builder":
 
 elif page == "Diagnostic Importance Analysis":
 
-    st.header("Diagnostic Importance Analysis")
+    st.markdown('<div class="big-title">🔎 Diagnostic Importance Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Highlight medically important terms in a report and inspect the most frequent known tokens.</div>', unsafe_allow_html=True)
 
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     report = st.text_area(
         "Enter Medical Report",
-        height=250
+        value=st.session_state["report"],
+        height=260
     )
 
     if st.button("Analyze Important Terms"):
@@ -321,29 +357,35 @@ elif page == "Diagnostic Importance Analysis":
                 "No known medical terms found."
             )
 
+    st.markdown('</div>', unsafe_allow_html=True)
+
 # =====================================================
 # PAGE 4
 # =====================================================
 
 elif page == "Model Information":
 
-    st.header("Model Information")
+    st.markdown('<div class="big-title">📈 Model Information</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Inspect model configuration, supported specialties, and tokenizer information.</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
 
     st.write(
-        "Maximum Sequence Length:",
+        "**Maximum Sequence Length:**",
         params["max_length"]
     )
 
     st.write(
-        "Vocabulary Size:",
+        "**Vocabulary Size:**",
         params["vocab_size"]
     )
 
     st.write(
-        "Number of Classes:",
+        "**Number of Classes:**",
         params["num_classes"]
     )
 
+    st.markdown("---")
     st.subheader("Supported Specialties")
 
     specialties = pd.DataFrame({
@@ -363,6 +405,7 @@ elif page == "Model Information":
     )
 
     st.text("\n".join(summary_lines))
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================
 # FOOTER
